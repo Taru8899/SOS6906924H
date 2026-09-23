@@ -1,28 +1,49 @@
 name: Build SOS69069 24H APK
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main, master ]
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/pip-constraint.txt
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build APK
-        uses: digreatbrian/buildozer-action@v2
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          buildozer-cmd: |
-            mkdir -p $HOME/.android
-            touch $HOME/.android/repositories.cfg
-            yes | sdkmanager --licenses || true
-            yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-            yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
-            buildozer -v android debug
+          python-version: '3.11'
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git python3-dev \
+            ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+            libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
+            zlib1g-dev unzip
+
+      - name: Install Buildozer (exact versions from working project)
+        run: |
+          pip install --upgrade pip
+          pip install buildozer==1.5.0 python-for-android==2024.1.21 cython==0.29.36
+
+      - name: Pre-accept Android SDK licenses
+        run: |
+          mkdir -p \~/.buildozer/android/platform
+          yes | buildozer android debug || true
+
+      - name: Build APK
+        run: yes | buildozer -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
