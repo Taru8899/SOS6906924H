@@ -8,8 +8,8 @@ source.main = main.py
 version = 1.1.0
 android.numeric_version = 110
 
-# Keep extremely minimal + pin versions that work with p4a 2024.1.21
-requirements = python3,kivy,requests==2.31.0,urllib3==2.0.7,certifi,chardet,idna,charset-normalizer==3.3.2
+# Force the same Python the working app used (3.11)
+requirements = hostpython3==3.11.9,python3==3.11.9,kivy,requests==2.31.0,urllib3==2.0.7,certifi,chardet,idna,charset-normalizer==3.3.2
 
 orientation = portrait
 fullscreen = 0
