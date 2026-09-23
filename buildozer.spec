@@ -21,10 +21,12 @@ android.permissions = INTERNET,WAKE_LOCK,FOREGROUND_SERVICE
 android.api = 33
 android.minapi = 24
 android.ndk = 25b
+android.build_tools = 34.0.0
 android.enable_androidx = True
 android.archs = arm64-v8a, armeabi-v7a
 android.allow_backup = True
 android.logcat_filters = *:S python:D
+android.accept_sdk_license = True
 
 [buildozer]
 log_level = 2
