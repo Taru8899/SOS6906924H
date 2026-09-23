@@ -5,6 +5,19 @@ SOS 69069 24H originates from verified Activity and Signatures. Whatever you do.
 Android miner for the SOS 69069 contract on Ethereum mainnet.
 0x7373DBC24Dcd785896E8Ac3d5372c6ced9B75a8A
 
+## Daily Capacity & Cost Estimates (Mainnet)
+
+One wallet using the pattern 6 signatures → 9 signatures → pause 6 seconds can realistically mint 15 000 – 20 000 signatures per day. 
+At low gas prices around 0.1 gwei this costs approximately $210 – $360 per day, or about $0.014 – $0.018 per signature.
+
+Ethereum can comfortably support 100 – 200 wallets running this full speed at the same time without significantly raising gas prices. 
+
+In a very safe scenario 20 – 40 wallets produce 300k – 800k signatures daily at a total cost of roughly $4 000 – $14 000. 
+
+Under moderate load 80 – 150 wallets can generate 1.2 – 3 million signatures for $17 000 – $54 000. 
+
+Pushing to 250 – 400 wallets reaches 4 – 8 million signatures and $56 000 – $144 000 daily spend, but beyond about 300 wallets the network starts to see higher base fees and longer confirmation times.
+
 ## Features
 - Logo top-left
 - Private key + task saved locally behind password (survives app restart)
