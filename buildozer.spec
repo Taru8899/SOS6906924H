@@ -8,8 +8,8 @@ source.main = main.py
 version = 1.1.0
 android.numeric_version = 110
 
-# CRITICAL: keep requirements minimal (this is why the other project builds)
-requirements = python3,kivy,requests,urllib3,certifi,chardet,idna
+# Keep extremely minimal + pin versions that work with p4a 2024.1.21
+requirements = python3,kivy,requests==2.31.0,urllib3==2.0.7,certifi,chardet,idna,charset-normalizer==3.3.2
 
 orientation = portrait
 fullscreen = 0
