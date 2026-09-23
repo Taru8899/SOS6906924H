@@ -10,7 +10,8 @@ source.exclude_dirs = tests, bin, venv, .git
 
 version = 1.1.0
 
-requirements = python3,kivy,web3,eth-account,eth-abi,eth-utils,hexbytes,cython,requests,urllib3,charset-normalizer,idna,certifi,pycryptodome
+# Pin stable Python + reduce heavy deps for successful build
+requirements = python3==3.11.9,kivy==2.3.0,web3,eth-account,eth-abi,eth-utils,hexbytes,requests,urllib3,charset-normalizer,idna,certifi,pycryptodome,cython==0.29.36,pyjnius,android
 
 icon.filename = %(source.dir)s/icon.png
 
@@ -23,10 +24,14 @@ android.minapi = 24
 android.ndk = 25b
 android.build_tools = 34.0.0
 android.enable_androidx = True
-android.archs = arm64-v8a, armeabi-v7a
+android.archs = arm64-v8a
 android.allow_backup = True
 android.logcat_filters = *:S python:D
 android.accept_sdk_license = True
+
+# Force stable python-for-android
+p4a.branch = develop
+p4a.bootstrap = sdl2
 
 [buildozer]
 log_level = 2
