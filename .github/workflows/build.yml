@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+
     steps:
       - uses: actions/checkout@v4
 
@@ -15,7 +16,13 @@ jobs:
         uses: digreatbrian/buildozer-action@v2
         with:
           python-version: "3.11"
-          buildozer-cmd: buildozer -v android debug
+          buildozer-cmd: |
+            mkdir -p $HOME/.android
+            touch $HOME/.android/repositories.cfg
+            yes | sdkmanager --licenses || true
+            yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+            yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
+            buildozer -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
