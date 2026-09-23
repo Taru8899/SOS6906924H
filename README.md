@@ -1,2 +1,2 @@
-# SOS6906924H
+# SOS69069 24H
 SOS 69069 24H originates from verified Activity and Signatures. Whatever you do. SOS records. Whatever you do. Continue ...
