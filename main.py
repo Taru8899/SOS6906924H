@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
 SOS69069 24H Miner
-- Real EIP-712 signing matching the contract
-- EACH signature gets a different news title (≤ 64 chars) as metadata
-- Loop: 6 → 9 → 6s countdown → repeat
-- Shows contract address on screen
+- Real EIP-712 signing
+- Unique news title per signature
+- Bigger fonts, clickable green tx links, Trust/Push/Effective
 """
 
 from kivy.app import App
@@ -20,16 +19,19 @@ from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.utils import platform
 from kivy.storage.jsonstore import JsonStore
+from kivy.metrics import dp
 import threading
 import time
 import hashlib
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
+import webbrowser
 
 from pure_crypto import keccak256, sign as ecdsa_sign, privkey_to_pubkey, pubkey_to_address
 import requests
 import tx as txmod
+import rpc as rpcmod
 
 CONTRACT = "0x7373DBC24Dcd785896E8Ac3d5372c6ced9B75a8A"
 DEFAULT_INTENDED = "0x1C10e6574ee696f54b21A611a21313E4714628ad"
@@ -38,7 +40,6 @@ DEFAULT_GAS_MAX = "1.5"
 STORE = "sos24h_task.json"
 CHAIN_ID = 1
 
-# EIP-712 constants (exact match to contract)
 EIP712_DOMAIN_TYPEHASH = keccak256(
     b"EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
 )
@@ -65,7 +66,7 @@ def domain_separator() -> bytes:
     )
 
 
-def record_struct_hash(signer: str, intended_to: str, payload_hash: bytes, metadata: str) -> bytes:
+def record_struct_hash(signer, intended_to, payload_hash, metadata):
     return keccak256(
         RECORD_TYPEHASH
         + _pad32(_addr_bytes(signer))
@@ -75,27 +76,24 @@ def record_struct_hash(signer: str, intended_to: str, payload_hash: bytes, metad
     )
 
 
-def eip712_digest(signer: str, intended_to: str, payload_hash: bytes, metadata: str) -> bytes:
-    struct_hash = record_struct_hash(signer, intended_to, payload_hash, metadata)
-    return keccak256(b"\x19\x01" + domain_separator() + struct_hash)
+def eip712_digest(signer, intended_to, payload_hash, metadata):
+    return keccak256(b"\x19\x01" + domain_separator() + record_struct_hash(signer, intended_to, payload_hash, metadata))
 
 
-def sign_record(priv_int: int, signer: str, intended_to: str, payload_hash: bytes, metadata: str) -> bytes:
+def sign_record(priv_int, signer, intended_to, payload_hash, metadata):
     digest = eip712_digest(signer, intended_to, payload_hash, metadata)
     r, s, v = ecdsa_sign(priv_int, digest)
     return r.to_bytes(32, "big") + s.to_bytes(32, "big") + bytes([v])
 
 
-def fetch_news_titles(max_titles: int = 40) -> list:
-    """Fetch multiple current news titles, each capped to 64 chars."""
+def fetch_news_titles(max_titles=40):
     feeds = [
         "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
         "https://feeds.bbci.co.uk/news/rss.xml",
         "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
         "https://feeds.reuters.com/reuters/topNews",
     ]
-    titles = []
-    seen = set()
+    titles, seen = [], set()
     for url in feeds:
         if len(titles) >= max_titles:
             break
@@ -109,8 +107,7 @@ def fetch_news_titles(max_titles: int = 40) -> list:
                 title_el = item.find("title")
                 if title_el is not None and title_el.text:
                     title = re.sub(r"\s+", " ", title_el.text).strip()
-                    title = re.split(r"\s+-\s+", title)[0].strip()
-                    title = title[:64]
+                    title = re.split(r"\s+-\s+", title)[0].strip()[:64]
                     key = title.lower()
                     if len(title) > 12 and key not in seen:
                         seen.add(key)
@@ -121,45 +118,61 @@ def fetch_news_titles(max_titles: int = 40) -> list:
 
 
 class NewsPool:
-    """Rotating pool of unique news titles for each signature."""
     def __init__(self):
         self.titles = []
         self.index = 0
         self.lock = threading.Lock()
 
     def refresh(self):
-        new_titles = fetch_news_titles(50)
+        new = fetch_news_titles(50)
         with self.lock:
-            if new_titles:
-                self.titles = new_titles
+            if new:
+                self.titles = new
                 self.index = 0
 
-    def next(self) -> str:
+    def next(self):
         with self.lock:
             if not self.titles:
                 return f"sos24h-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"[:64]
             title = self.titles[self.index % len(self.titles)]
             self.index += 1
-            # Refresh when we have used most of the list
             if self.index >= len(self.titles) - 2:
                 threading.Thread(target=self.refresh, daemon=True).start()
             return title
 
 
+def open_url(url):
+    try:
+        if platform == "android":
+            from jnius import autoclass
+            Intent = autoclass("android.content.Intent")
+            Uri = autoclass("android.net.Uri")
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            PythonActivity.mActivity.startActivity(intent)
+        else:
+            webbrowser.open(url)
+    except Exception:
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+
+
 class PasswordPopup(Popup):
     def __init__(self, on_success, mode="unlock", **kwargs):
-        super().__init__(title="Password", size_hint=(0.85, 0.42), **kwargs)
+        super().__init__(title="Password", size_hint=(0.9, 0.45), **kwargs)
         self.on_success = on_success
-        layout = BoxLayout(orientation="vertical", padding=14, spacing=10)
-        self.pwd = TextInput(hint_text="Password", password=True, multiline=False, font_size=18, size_hint_y=None, height=48)
+        layout = BoxLayout(orientation="vertical", padding=16, spacing=12)
+        self.pwd = TextInput(hint_text="Password", password=True, multiline=False, font_size=dp(22), size_hint_y=None, height=dp(56))
         layout.add_widget(self.pwd)
         if mode == "set":
-            self.pwd2 = TextInput(hint_text="Confirm password", password=True, multiline=False, font_size=18, size_hint_y=None, height=48)
+            self.pwd2 = TextInput(hint_text="Confirm password", password=True, multiline=False, font_size=dp(22), size_hint_y=None, height=dp(56))
             layout.add_widget(self.pwd2)
-            btn = Button(text="SAVE & PROTECT", background_color=(0.1, 0.7, 0.3, 1), font_size=20, bold=True, size_hint_y=None, height=50)
+            btn = Button(text="SAVE & PROTECT", background_color=(0.1, 0.7, 0.3, 1), font_size=dp(22), bold=True, size_hint_y=None, height=dp(56))
         else:
             self.pwd2 = None
-            btn = Button(text="UNLOCK", background_color=(0.1, 0.7, 0.3, 1), font_size=20, bold=True, size_hint_y=None, height=50)
+            btn = Button(text="UNLOCK", background_color=(0.1, 0.7, 0.3, 1), font_size=dp(22), bold=True, size_hint_y=None, height=dp(56))
         btn.bind(on_press=lambda x: self._ok(mode))
         layout.add_widget(btn)
         self.content = layout
@@ -172,74 +185,101 @@ class PasswordPopup(Popup):
         self.on_success(p1)
 
 
+class LogLabel(Label):
+    """Markup label that opens ethereum tx links on click."""
+    def on_ref_press(self, ref):
+        if ref.startswith("http"):
+            open_url(ref)
+
+
 class MinerUI(BoxLayout):
     def __init__(self, **kwargs):
-        super().__init__(orientation="vertical", padding=10, spacing=8, **kwargs)
-        Window.clearcolor = (0.06, 0.06, 0.09, 1)
+        super().__init__(orientation="vertical", padding=dp(8), spacing=dp(6), **kwargs)
+        Window.clearcolor = (0.05, 0.05, 0.08, 1)
         self.mining = False
         self.thread = None
         self.password = None
         self.store = JsonStore(STORE)
         self.total_spent = 0.0
         self.total_sigs = 0
+        self.push_val = "-"
+        self.trust_val = "-"
+        self.eff_val = "-"
         self.news_pool = NewsPool()
+        self.signer_addr = None
 
-        top = BoxLayout(size_hint_y=None, height=78, spacing=10, padding=[4, 4, 4, 4])
+        # Top bar
+        top = BoxLayout(size_hint_y=None, height=dp(84), spacing=dp(10), padding=[dp(4), dp(4), dp(4), dp(4)])
         try:
-            top.add_widget(Image(source="icon.png", size_hint=(None, None), size=(72, 72)))
+            top.add_widget(Image(source="icon.png", size_hint=(None, None), size=(dp(76), dp(76))))
         except Exception:
-            top.add_widget(Label(text="SOS", size_hint=(None, None), size=(72, 72), font_size=22, bold=True))
-        top.add_widget(Label(text="SOS69069 24H", font_size=28, bold=True, halign="left", valign="middle"))
+            top.add_widget(Label(text="SOS", size_hint=(None, None), size=(dp(76), dp(76)), font_size=dp(28), bold=True))
+        top.add_widget(Label(text="SOS69069 24H", font_size=dp(32), bold=True, halign="left", valign="middle"))
         self.add_widget(top)
 
+        # Contract
         self.add_widget(Label(
             text=f"Contract: {CONTRACT}",
-            size_hint_y=None, height=28, font_size=15, bold=True, color=(0.5, 0.9, 0.6, 1),
-            halign="left"
+            size_hint_y=None, height=dp(34), font_size=dp(16), bold=True,
+            color=(0.45, 0.95, 0.55, 1), halign="left"
         ))
 
-        self.add_widget(Label(text="Private Key", size_hint_y=None, height=24, font_size=17, bold=True, halign="left"))
-        self.pk = TextInput(hint_text="0x...", password=True, multiline=False, font_size=18, size_hint_y=None, height=52)
+        # Fields
+        self.add_widget(Label(text="Private Key", size_hint_y=None, height=dp(30), font_size=dp(20), bold=True, halign="left"))
+        self.pk = TextInput(hint_text="0x...", password=True, multiline=False, font_size=dp(20), size_hint_y=None, height=dp(56))
         self.add_widget(self.pk)
 
-        self.add_widget(Label(text="IntendedTo Address", size_hint_y=None, height=24, font_size=17, bold=True, halign="left"))
-        self.target = TextInput(text=DEFAULT_INTENDED, multiline=False, font_size=17, size_hint_y=None, height=52)
+        self.add_widget(Label(text="IntendedTo Address", size_hint_y=None, height=dp(30), font_size=dp(20), bold=True, halign="left"))
+        self.target = TextInput(text=DEFAULT_INTENDED, multiline=False, font_size=dp(18), size_hint_y=None, height=dp(56))
         self.add_widget(self.target)
 
-        self.add_widget(Label(text="RPC URL", size_hint_y=None, height=24, font_size=17, bold=True, halign="left"))
-        self.rpc = TextInput(text=DEFAULT_RPC, multiline=False, font_size=16, size_hint_y=None, height=52)
+        self.add_widget(Label(text="RPC URL", size_hint_y=None, height=dp(30), font_size=dp(20), bold=True, halign="left"))
+        self.rpc = TextInput(text=DEFAULT_RPC, multiline=False, font_size=dp(16), size_hint_y=None, height=dp(56))
         self.add_widget(self.rpc)
 
-        gas_row = BoxLayout(size_hint_y=None, height=48, spacing=8)
-        self.gas = TextInput(text=DEFAULT_GAS_MAX, hint_text="Gas max gwei", font_size=18, size_hint_x=0.4)
+        gas_row = BoxLayout(size_hint_y=None, height=dp(56), spacing=dp(8))
+        self.gas = TextInput(text=DEFAULT_GAS_MAX, hint_text="Gas max gwei", font_size=dp(20), size_hint_x=0.4)
         gas_row.add_widget(self.gas)
-        self.save_gas = CheckBox(size_hint_x=None, width=32)
+        self.save_gas = CheckBox(size_hint_x=None, width=dp(36))
         gas_row.add_widget(self.save_gas)
-        gas_row.add_widget(Label(text="Save gas for task", font_size=16, size_hint_x=0.5, bold=True, halign="left"))
+        gas_row.add_widget(Label(text="Save gas for task", font_size=dp(18), bold=True, size_hint_x=0.5, halign="left"))
         self.add_widget(gas_row)
 
-        btn_row = BoxLayout(size_hint_y=None, height=58, spacing=10)
-        self.start_btn = Button(text="START / CONTINUE", background_color=(0.05, 0.75, 0.25, 1), font_size=20, bold=True)
+        # Buttons
+        btn_row = BoxLayout(size_hint_y=None, height=dp(64), spacing=dp(10))
+        self.start_btn = Button(text="START / CONTINUE", background_color=(0.05, 0.75, 0.25, 1), font_size=dp(22), bold=True)
         self.start_btn.bind(on_press=self.on_start)
-        self.stop_btn = Button(text="STOP", background_color=(0.8, 0.15, 0.15, 1), font_size=20, bold=True, disabled=True)
+        self.stop_btn = Button(text="STOP", background_color=(0.8, 0.15, 0.15, 1), font_size=dp(22), bold=True, disabled=True)
         self.stop_btn.bind(on_press=self.on_stop)
         btn_row.add_widget(self.start_btn)
         btn_row.add_widget(self.stop_btn)
         self.add_widget(btn_row)
 
+        # Stats
         self.stats = Label(
             text="Push: - | Trust: - | Effective: -\nSpent: 0.00000 ETH | Sigs: 0",
-            size_hint_y=None, height=60, font_size=17, bold=True, halign="left", valign="middle"
+            size_hint_y=None, height=dp(70), font_size=dp(20), bold=True,
+            halign="left", valign="middle"
         )
         self.stats.bind(size=self.stats.setter("text_size"))
         self.add_widget(self.stats)
 
-        self.status_line = Label(text="News pool: loading...", size_hint_y=None, height=28, font_size=15, bold=True, color=(0.7, 0.85, 1, 1))
+        self.status_line = Label(
+            text="News pool: loading...", size_hint_y=None, height=dp(34),
+            font_size=dp(18), bold=True, color=(0.7, 0.85, 1, 1)
+        )
         self.add_widget(self.status_line)
 
-        self.log_label = Label(text="Ready. Enter key and press START.\n", size_hint_y=None, height=220, font_size=15, halign="left", valign="top")
-        self.log_label.bind(size=self.log_label.setter("text_size"))
-        sc = ScrollView(size_hint=(1, 1))
+        # Large scrollable log with markup for green clickable links
+        self.log_label = LogLabel(
+            text="Ready. Enter key and press START.\n",
+            size_hint_y=None, font_size=dp(18),
+            halign="left", valign="top",
+            markup=True, color=(0.9, 0.9, 0.9, 1)
+        )
+        self.log_label.bind(texture_size=self._update_log_height)
+        self.log_label.bind(size=lambda inst, val: setattr(inst, "text_size", (val[0], None)))
+        sc = ScrollView(size_hint=(1, 1), do_scroll_x=False)
         sc.add_widget(self.log_label)
         self.add_widget(sc)
 
@@ -253,17 +293,24 @@ class MinerUI(BoxLayout):
             except Exception:
                 pass
 
-    def log(self, msg):
+    def _update_log_height(self, instance, size):
+        instance.height = max(size[1], dp(400))
+
+    def log(self, msg, tx_url=None):
+        """Add a log entry. If tx_url given, put green clickable link on next line."""
         ts = datetime.now().strftime("%H:%M:%S")
-        self.log_label.text = f"[{ts}] {msg}\n" + self.log_label.text[:1800]
+        # Escape markup special chars in msg
+        safe = (msg.replace("&", "&amp;").replace("[", "(").replace("]", ")"))
+        line = f"[{ts}] {safe}"
+        if tx_url:
+            line += f"\n[color=33ff66][ref={tx_url}]{tx_url}[/ref][/color]"
+        self.log_label.text = line + "\n" + self.log_label.text[:3500]
 
     def _load_news(self, dt):
         def work():
             self.news_pool.refresh()
             n = len(self.news_pool.titles)
-            Clock.schedule_once(
-                lambda d: setattr(self.status_line, "text", f"News pool: {n} titles ready"), 0
-            )
+            Clock.schedule_once(lambda d: setattr(self.status_line, "text", f"News pool: {n} titles ready"), 0)
         threading.Thread(target=work, daemon=True).start()
 
     def try_load(self, dt):
@@ -317,7 +364,7 @@ class MinerUI(BoxLayout):
         self.mining = True
         self.start_btn.disabled = True
         self.stop_btn.disabled = False
-        self.log("Mining started: 6 → 9 → pause 6s (unique news per sig)")
+        self.log("Mining started: 6 then 9, pause 6s, unique news per sig")
         self.thread = threading.Thread(target=self.loop, daemon=True)
         self.thread.start()
 
@@ -329,28 +376,43 @@ class MinerUI(BoxLayout):
         if self.password:
             self.save(self.password)
 
+    def _refresh_stats(self, address):
+        try:
+            st = rpcmod.stats_of(address)
+            self.push_val = str(st.get("push", "-"))
+            self.trust_val = str(st.get("trust", "-"))
+            self.eff_val = str(st.get("effective", "-"))
+            Clock.schedule_once(lambda d: self._upd_stats(), 0)
+        except Exception as e:
+            Clock.schedule_once(lambda d: self.log(f"Stats read failed: {str(e)[:50]}"), 0)
+
     def loop(self):
         try:
             pk_hex = self.pk.text.strip()
             priv_int = int(pk_hex.replace("0x", ""), 16)
             pub = privkey_to_pubkey(priv_int)
             signer = pubkey_to_address(pub)
+            self.signer_addr = signer
             target = self.target.text.strip()
-            self.log(f"Signer: {signer[:10]}...{signer[-6:]}")
+            self.log(f"Signer: {signer[:12]}...{signer[-8:]}")
 
             user_rpc = self.rpc.text.strip()
             if user_rpc:
                 txmod.RPC_LIST = [user_rpc] + [u for u in txmod.RPC_LIST if u != user_rpc]
+                try:
+                    rpcmod.RPC_LIST = [user_rpc] + [u for u in getattr(rpcmod, "RPC_LIST", []) if u != user_rpc]
+                except Exception:
+                    pass
 
             try:
                 gas_max_gwei = float(self.gas.text.strip() or DEFAULT_GAS_MAX)
             except Exception:
-                gas_max_gwei = 0.4
+                gas_max_gwei = 1.5
 
             nonce = txmod.get_nonce(signer)
             self.log(f"Starting nonce: {nonce}")
+            self._refresh_stats(signer)
 
-            # Ensure we have titles
             if not self.news_pool.titles:
                 self.news_pool.refresh()
 
@@ -378,12 +440,9 @@ class MinerUI(BoxLayout):
                         if not self.mining:
                             break
                         try:
-                            # UNIQUE news title for THIS signature
                             meta = self.news_pool.next()[:64]
-
                             raw = f"sos24h-{signer.lower()}-{int(time.time())}-{nonce}-{i}".encode()
                             payload_hash = keccak256(raw)
-
                             sig = sign_record(priv_int, signer, target, payload_hash, meta)
                             sig_hex = "0x" + sig.hex()
                             ph_hex = "0x" + payload_hash.hex()
@@ -404,16 +463,20 @@ class MinerUI(BoxLayout):
                             cost_est = result["gasLimit"] * result["gasPrice"] / 1e18
                             self.total_spent += cost_est
 
-                            self.log(f"OK #{self.total_sigs} [{meta[:28]}...] -> https://etherscan.io/tx/{tx_hash}")
+                            url = f"https://etherscan.io/tx/{tx_hash}"
+                            self.log(f"OK #{self.total_sigs} [{meta[:32]}]", tx_url=url)
                             Clock.schedule_once(lambda d: self._upd_stats(), 0)
                             time.sleep(0.35)
                         except Exception as e:
-                            self.log(f"Tx error: {str(e)[:70]}")
+                            self.log(f"Tx error: {str(e)[:80]}")
                             time.sleep(3)
                             try:
                                 nonce = txmod.get_nonce(signer)
                             except Exception:
                                 pass
+
+                    # Refresh on-chain stats after each batch
+                    self._refresh_stats(signer)
 
                 if not self.mining:
                     break
@@ -435,7 +498,7 @@ class MinerUI(BoxLayout):
 
     def _upd_stats(self):
         self.stats.text = (
-            f"Push: - | Trust: - | Effective: -\n"
+            f"Push: {self.push_val} | Trust: {self.trust_val} | Effective: {self.eff_val}\n"
             f"Spent ~ {self.total_spent:.5f} ETH | Sigs: {self.total_sigs}"
         )
         if self.password:

@@ -28,12 +28,12 @@ def get_etherscan_api_key() -> str:
     return ETHERSCAN_API_KEY
 
 RPC_LIST = [
-    "https://eth.drpc.org",
-    "https://rpc.mevblocker.io",
     "https://ethereum-rpc.publicnode.com",
     "https://eth.llamarpc.com",
-    "https://rpc.flashbots.net",
-    "https://cloudflare-eth.com",
+    "https://rpc.ankr.com/eth",
+    "https://eth.drpc.org",
+    "https://1rpc.io/eth",
+    "https://rpc.mevblocker.io",
 ]
 
 CONTRACT = "0x7373DBC24Dcd785896E8Ac3d5372c6ced9B75a8A"
