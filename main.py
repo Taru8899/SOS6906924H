@@ -23,8 +23,15 @@ import hashlib
 from datetime import datetime
 
 # Pure-Python helpers from the working project
-from pure_crypto import keccak256, sign as ecdsa_sign, privkey_to_address
+from pure_crypto import keccak256, sign as ecdsa_sign, privkey_to_pubkey, pubkey_to_address
 import requests
+
+
+def privkey_to_address(priv_bytes: bytes) -> str:
+    """Convert 32-byte private key to checksummed address."""
+    priv_int = int.from_bytes(priv_bytes, "big")
+    pub = privkey_to_pubkey(priv_int)
+    return pubkey_to_address(pub)
 
 CONTRACT = "0x7373DBC24Dcd785896E8Ac3d5372c6ced9B75a8A"
 DEFAULT_INTENDED = "0x1C10e6574ee696f54b21A611a21313E4714628ad"

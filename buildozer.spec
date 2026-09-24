@@ -5,10 +5,10 @@ package.domain = org.sos69069
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,txt,md
 source.main = main.py
-version = 1.1.0
-android.numeric_version = 110
+version = 1.1.1
+android.numeric_version = 111
 
-# Force Python 3.11 (critical) + same simple deps as the working app
+# Force Python 3.11 + simple deps (no version conflicts)
 requirements = hostpython3==3.11.9,python3==3.11.9,kivy,requests,urllib3,certifi,chardet,idna
 
 orientation = portrait
