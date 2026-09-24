@@ -34,7 +34,7 @@ import tx as txmod
 CONTRACT = "0x7373DBC24Dcd785896E8Ac3d5372c6ced9B75a8A"
 DEFAULT_INTENDED = "0x1C10e6574ee696f54b21A611a21313E4714628ad"
 DEFAULT_RPC = "https://ethereum-rpc.publicnode.com"
-DEFAULT_GAS_MAX = "0.4"
+DEFAULT_GAS_MAX = "1.5"
 STORE = "sos24h_task.json"
 CHAIN_ID = 1
 
@@ -156,10 +156,10 @@ class PasswordPopup(Popup):
         if mode == "set":
             self.pwd2 = TextInput(hint_text="Confirm password", password=True, multiline=False, font_size=18, size_hint_y=None, height=48)
             layout.add_widget(self.pwd2)
-            btn = Button(text="SAVE & PROTECT", background_color=(0.1, 0.7, 0.3, 1), font_size=18, bold=True, size_hint_y=None, height=50)
+            btn = Button(text="SAVE & PROTECT", background_color=(0.1, 0.7, 0.3, 1), font_size=20, bold=True, size_hint_y=None, height=50)
         else:
             self.pwd2 = None
-            btn = Button(text="UNLOCK", background_color=(0.1, 0.7, 0.3, 1), font_size=18, bold=True, size_hint_y=None, height=50)
+            btn = Button(text="UNLOCK", background_color=(0.1, 0.7, 0.3, 1), font_size=20, bold=True, size_hint_y=None, height=50)
         btn.bind(on_press=lambda x: self._ok(mode))
         layout.add_widget(btn)
         self.content = layout
@@ -184,44 +184,44 @@ class MinerUI(BoxLayout):
         self.total_sigs = 0
         self.news_pool = NewsPool()
 
-        top = BoxLayout(size_hint_y=None, height=70, spacing=10, padding=[4, 4, 4, 4])
+        top = BoxLayout(size_hint_y=None, height=78, spacing=10, padding=[4, 4, 4, 4])
         try:
-            top.add_widget(Image(source="icon.png", size_hint=(None, None), size=(66, 66)))
+            top.add_widget(Image(source="icon.png", size_hint=(None, None), size=(72, 72)))
         except Exception:
-            top.add_widget(Label(text="SOS", size_hint=(None, None), size=(66, 66), font_size=22, bold=True))
-        top.add_widget(Label(text="SOS69069 24H", font_size=24, bold=True, halign="left", valign="middle"))
+            top.add_widget(Label(text="SOS", size_hint=(None, None), size=(72, 72), font_size=22, bold=True))
+        top.add_widget(Label(text="SOS69069 24H", font_size=28, bold=True, halign="left", valign="middle"))
         self.add_widget(top)
 
         self.add_widget(Label(
             text=f"Contract: {CONTRACT}",
-            size_hint_y=None, height=28, font_size=13, color=(0.5, 0.9, 0.6, 1),
+            size_hint_y=None, height=28, font_size=15, bold=True, color=(0.5, 0.9, 0.6, 1),
             halign="left"
         ))
 
-        self.add_widget(Label(text="Private Key", size_hint_y=None, height=24, font_size=15, bold=True, halign="left"))
-        self.pk = TextInput(hint_text="0x...", password=True, multiline=False, font_size=16, size_hint_y=None, height=48)
+        self.add_widget(Label(text="Private Key", size_hint_y=None, height=24, font_size=17, bold=True, halign="left"))
+        self.pk = TextInput(hint_text="0x...", password=True, multiline=False, font_size=18, size_hint_y=None, height=52)
         self.add_widget(self.pk)
 
-        self.add_widget(Label(text="IntendedTo Address", size_hint_y=None, height=24, font_size=15, bold=True, halign="left"))
-        self.target = TextInput(text=DEFAULT_INTENDED, multiline=False, font_size=15, size_hint_y=None, height=48)
+        self.add_widget(Label(text="IntendedTo Address", size_hint_y=None, height=24, font_size=17, bold=True, halign="left"))
+        self.target = TextInput(text=DEFAULT_INTENDED, multiline=False, font_size=17, size_hint_y=None, height=52)
         self.add_widget(self.target)
 
-        self.add_widget(Label(text="RPC URL", size_hint_y=None, height=24, font_size=15, bold=True, halign="left"))
-        self.rpc = TextInput(text=DEFAULT_RPC, multiline=False, font_size=14, size_hint_y=None, height=48)
+        self.add_widget(Label(text="RPC URL", size_hint_y=None, height=24, font_size=17, bold=True, halign="left"))
+        self.rpc = TextInput(text=DEFAULT_RPC, multiline=False, font_size=16, size_hint_y=None, height=52)
         self.add_widget(self.rpc)
 
         gas_row = BoxLayout(size_hint_y=None, height=48, spacing=8)
-        self.gas = TextInput(text=DEFAULT_GAS_MAX, hint_text="Gas max gwei", font_size=16, size_hint_x=0.4)
+        self.gas = TextInput(text=DEFAULT_GAS_MAX, hint_text="Gas max gwei", font_size=18, size_hint_x=0.4)
         gas_row.add_widget(self.gas)
         self.save_gas = CheckBox(size_hint_x=None, width=32)
         gas_row.add_widget(self.save_gas)
-        gas_row.add_widget(Label(text="Save gas for task", font_size=14, size_hint_x=0.5, halign="left"))
+        gas_row.add_widget(Label(text="Save gas for task", font_size=16, size_hint_x=0.5, bold=True, halign="left"))
         self.add_widget(gas_row)
 
-        btn_row = BoxLayout(size_hint_y=None, height=54, spacing=10)
-        self.start_btn = Button(text="START / CONTINUE", background_color=(0.05, 0.75, 0.25, 1), font_size=18, bold=True)
+        btn_row = BoxLayout(size_hint_y=None, height=58, spacing=10)
+        self.start_btn = Button(text="START / CONTINUE", background_color=(0.05, 0.75, 0.25, 1), font_size=20, bold=True)
         self.start_btn.bind(on_press=self.on_start)
-        self.stop_btn = Button(text="STOP", background_color=(0.8, 0.15, 0.15, 1), font_size=18, bold=True, disabled=True)
+        self.stop_btn = Button(text="STOP", background_color=(0.8, 0.15, 0.15, 1), font_size=20, bold=True, disabled=True)
         self.stop_btn.bind(on_press=self.on_stop)
         btn_row.add_widget(self.start_btn)
         btn_row.add_widget(self.stop_btn)
@@ -229,15 +229,15 @@ class MinerUI(BoxLayout):
 
         self.stats = Label(
             text="Push: - | Trust: - | Effective: -\nSpent: 0.00000 ETH | Sigs: 0",
-            size_hint_y=None, height=56, font_size=15, halign="left", valign="middle"
+            size_hint_y=None, height=60, font_size=17, bold=True, halign="left", valign="middle"
         )
         self.stats.bind(size=self.stats.setter("text_size"))
         self.add_widget(self.stats)
 
-        self.status_line = Label(text="News pool: loading...", size_hint_y=None, height=28, font_size=13, color=(0.7, 0.85, 1, 1))
+        self.status_line = Label(text="News pool: loading...", size_hint_y=None, height=28, font_size=15, bold=True, color=(0.7, 0.85, 1, 1))
         self.add_widget(self.status_line)
 
-        self.log_label = Label(text="Ready. Enter key and press START.\n", size_hint_y=None, height=220, font_size=13, halign="left", valign="top")
+        self.log_label = Label(text="Ready. Enter key and press START.\n", size_hint_y=None, height=220, font_size=15, halign="left", valign="top")
         self.log_label.bind(size=self.log_label.setter("text_size"))
         sc = ScrollView(size_hint=(1, 1))
         sc.add_widget(self.log_label)
@@ -361,14 +361,18 @@ class MinerUI(BoxLayout):
 
                     info = txmod.get_gas_price_info()
                     if info["gwei"] > gas_max_gwei:
-                        self.log(f"Gas {info['gwei']:.3f} > max {gas_max_gwei} – waiting")
+                        src = info.get("source", "rpc")
+                        self.log(f"Gas {info['gwei']:.3f} ({src}) > max {gas_max_gwei} - raise Gas max or wait")
                         Clock.schedule_once(
-                            lambda d: setattr(self.status_line, "text", f"Waiting for gas <= {gas_max_gwei} gwei"), 0
+                            lambda d, g=info["gwei"], m=gas_max_gwei: setattr(
+                                self.status_line, "text", f"Gas now {g:.2f} gwei (max {m}) - raise max to mint"
+                            ), 0
                         )
-                        time.sleep(15)
+                        time.sleep(12)
                         continue
 
-                    self.log(f"Batch of {batch_size}...")
+                    src = info.get("source", "rpc")
+                    self.log(f"Batch of {batch_size} | gas {info['gwei']:.3f} gwei ({src})")
 
                     for i in range(batch_size):
                         if not self.mining:

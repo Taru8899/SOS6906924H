@@ -7,12 +7,12 @@ import requests
 from pure_crypto import keccak256, sign as ecdsa_sign, privkey_to_pubkey, N
 
 RPC_LIST = [
-    "https://eth.drpc.org",
-    "https://rpc.mevblocker.io",
     "https://ethereum-rpc.publicnode.com",
     "https://eth.llamarpc.com",
-    "https://rpc.flashbots.net",
-    "https://cloudflare-eth.com",
+    "https://rpc.ankr.com/eth",
+    "https://eth.drpc.org",
+    "https://1rpc.io/eth",
+    "https://rpc.mevblocker.io",
 ]
 
 CONTRACT = "0x7373DBC24Dcd785896E8Ac3d5372c6ced9B75a8A"
@@ -131,22 +131,59 @@ def get_nonce(address: str) -> int:
     return int(result, 16)
 
 
+ETHERSCAN_API_KEY = "RU99NEJZV9F2EWS7A97RWVHDJN1ZQ29Q99"
+ETHERSCAN_GAS_URL = "https://api.etherscan.io/v2/api"
+
+
+def _gas_from_etherscan() -> int:
+    """Try Etherscan gas oracle first. Returns base gas price in wei."""
+    try:
+        r = requests.get(
+            ETHERSCAN_GAS_URL,
+            params={
+                "chainid": "1",
+                "module": "gastracker",
+                "action": "gasoracle",
+                "apikey": ETHERSCAN_API_KEY,
+            },
+            timeout=8,
+        )
+        r.raise_for_status()
+        data = r.json()
+        if data.get("status") == "1" and "result" in data:
+            # ProposeGasPrice is a good standard target (gwei)
+            gwei = float(data["result"].get("ProposeGasPrice") or data["result"].get("SafeGasPrice") or 0)
+            if gwei > 0:
+                return int(gwei * 1e9)
+    except Exception:
+        pass
+    return 0
+
+
 def get_gas_price() -> int:
-    result = _rpc("eth_gasPrice", [])
-    # bump 10% for faster inclusion
-    return int(int(result, 16) * 1.1)
+    """Etherscan first, then RPC fallback. +5% bump for inclusion."""
+    base = _gas_from_etherscan()
+    if base <= 0:
+        result = _rpc("eth_gasPrice", [])
+        base = int(result, 16)
+    return int(base * 1.05)
 
 
 def get_gas_price_info() -> dict:
-    """Return current gas price in wei and gwei (with 10% bump)."""
-    result = _rpc("eth_gasPrice", [])
-    base = int(result, 16)
-    bumped = int(base * 1.1)
+    """Return current gas price in wei and gwei. Etherscan first, RPC fallback."""
+    base = _gas_from_etherscan()
+    source = "etherscan"
+    if base <= 0:
+        result = _rpc("eth_gasPrice", [])
+        base = int(result, 16)
+        source = "rpc"
+    bumped = int(base * 1.05)
     return {
         "wei": bumped,
         "baseWei": base,
         "gwei": bumped / 1e9,
         "baseGwei": base / 1e9,
+        "source": source,
     }
 
 
