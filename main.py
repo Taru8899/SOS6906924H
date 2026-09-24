@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 SOS69069 24H Miner
-- Real EIP-712 signing
-- Unique news title per signature
-- Bigger fonts, clickable green tx links, Trust/Push/Effective
+- Pinned logo + title
+- Scrollable centered content
+- EIP-712, unique news metadata, clickable green tx links
 """
 
 from kivy.app import App
@@ -15,6 +15,7 @@ from kivy.uix.checkbox import CheckBox
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.image import Image
 from kivy.uix.popup import Popup
+from kivy.uix.anchorlayout import AnchorLayout
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.utils import platform
@@ -161,18 +162,18 @@ def open_url(url):
 
 class PasswordPopup(Popup):
     def __init__(self, on_success, mode="unlock", **kwargs):
-        super().__init__(title="Password", size_hint=(0.9, 0.45), **kwargs)
+        super().__init__(title="Password", size_hint=(0.9, 0.4), **kwargs)
         self.on_success = on_success
-        layout = BoxLayout(orientation="vertical", padding=16, spacing=12)
-        self.pwd = TextInput(hint_text="Password", password=True, multiline=False, font_size=dp(22), size_hint_y=None, height=dp(56))
+        layout = BoxLayout(orientation="vertical", padding=dp(14), spacing=dp(10))
+        self.pwd = TextInput(hint_text="Password", password=True, multiline=False, font_size=dp(18), size_hint_y=None, height=dp(48))
         layout.add_widget(self.pwd)
         if mode == "set":
-            self.pwd2 = TextInput(hint_text="Confirm password", password=True, multiline=False, font_size=dp(22), size_hint_y=None, height=dp(56))
+            self.pwd2 = TextInput(hint_text="Confirm password", password=True, multiline=False, font_size=dp(18), size_hint_y=None, height=dp(48))
             layout.add_widget(self.pwd2)
-            btn = Button(text="SAVE & PROTECT", background_color=(0.1, 0.7, 0.3, 1), font_size=dp(22), bold=True, size_hint_y=None, height=dp(56))
+            btn = Button(text="SAVE & PROTECT", background_color=(0.1, 0.7, 0.3, 1), font_size=dp(18), bold=True, size_hint_y=None, height=dp(48))
         else:
             self.pwd2 = None
-            btn = Button(text="UNLOCK", background_color=(0.1, 0.7, 0.3, 1), font_size=dp(22), bold=True, size_hint_y=None, height=dp(56))
+            btn = Button(text="UNLOCK", background_color=(0.1, 0.7, 0.3, 1), font_size=dp(18), bold=True, size_hint_y=None, height=dp(48))
         btn.bind(on_press=lambda x: self._ok(mode))
         layout.add_widget(btn)
         self.content = layout
@@ -186,7 +187,6 @@ class PasswordPopup(Popup):
 
 
 class LogLabel(Label):
-    """Markup label that opens ethereum tx links on click."""
     def on_ref_press(self, ref):
         if ref.startswith("http"):
             open_url(ref)
@@ -194,7 +194,7 @@ class LogLabel(Label):
 
 class MinerUI(BoxLayout):
     def __init__(self, **kwargs):
-        super().__init__(orientation="vertical", padding=dp(8), spacing=dp(6), **kwargs)
+        super().__init__(orientation="vertical", padding=0, spacing=0, **kwargs)
         Window.clearcolor = (0.05, 0.05, 0.08, 1)
         self.mining = False
         self.thread = None
@@ -208,80 +208,111 @@ class MinerUI(BoxLayout):
         self.news_pool = NewsPool()
         self.signer_addr = None
 
-        # Top bar
-        top = BoxLayout(size_hint_y=None, height=dp(84), spacing=dp(10), padding=[dp(4), dp(4), dp(4), dp(4)])
+        # ========== PINNED HEADER (logo + title) ==========
+        header = BoxLayout(
+            size_hint_y=None, height=dp(72), spacing=dp(10),
+            padding=[dp(10), dp(8), dp(10), dp(8)]
+        )
         try:
-            top.add_widget(Image(source="icon.png", size_hint=(None, None), size=(dp(76), dp(76))))
+            header.add_widget(Image(source="icon.png", size_hint=(None, None), size=(dp(56), dp(56))))
         except Exception:
-            top.add_widget(Label(text="SOS", size_hint=(None, None), size=(dp(76), dp(76)), font_size=dp(28), bold=True))
-        top.add_widget(Label(text="SOS69069 24H", font_size=dp(32), bold=True, halign="left", valign="middle"))
-        self.add_widget(top)
-
-        # Contract
-        self.add_widget(Label(
-            text=f"Contract: {CONTRACT}",
-            size_hint_y=None, height=dp(34), font_size=dp(16), bold=True,
-            color=(0.45, 0.95, 0.55, 1), halign="left"
+            header.add_widget(Label(text="SOS", size_hint=(None, None), size=(dp(56), dp(56)), font_size=dp(22), bold=True))
+        header.add_widget(Label(
+            text="SOS69069 24H", font_size=dp(26), bold=True,
+            halign="left", valign="middle"
         ))
+        self.add_widget(header)
 
-        # Fields
-        self.add_widget(Label(text="Private Key", size_hint_y=None, height=dp(30), font_size=dp(20), bold=True, halign="left"))
-        self.pk = TextInput(hint_text="0x...", password=True, multiline=False, font_size=dp(20), size_hint_y=None, height=dp(56))
-        self.add_widget(self.pk)
+        # ========== SCROLLABLE CONTENT ==========
+        scroll = ScrollView(size_hint=(1, 1), do_scroll_x=False, bar_width=dp(4))
+        # Inner content: centered column
+        content = BoxLayout(
+            orientation="vertical", size_hint_y=None, spacing=dp(8),
+            padding=[dp(12), dp(6), dp(12), dp(16)]
+        )
+        content.bind(minimum_height=content.setter("height"))
 
-        self.add_widget(Label(text="IntendedTo Address", size_hint_y=None, height=dp(30), font_size=dp(20), bold=True, halign="left"))
-        self.target = TextInput(text=DEFAULT_INTENDED, multiline=False, font_size=dp(18), size_hint_y=None, height=dp(56))
-        self.add_widget(self.target)
+        def field_label(txt):
+            return Label(
+                text=txt, size_hint_y=None, height=dp(26),
+                font_size=dp(16), bold=True, halign="center", valign="middle"
+            )
 
-        self.add_widget(Label(text="RPC URL", size_hint_y=None, height=dp(30), font_size=dp(20), bold=True, halign="left"))
-        self.rpc = TextInput(text=DEFAULT_RPC, multiline=False, font_size=dp(16), size_hint_y=None, height=dp(56))
-        self.add_widget(self.rpc)
+        def make_input(**kw):
+            defaults = dict(multiline=False, font_size=dp(15), size_hint_y=None, height=dp(48), halign="center")
+            defaults.update(kw)
+            return TextInput(**defaults)
 
-        gas_row = BoxLayout(size_hint_y=None, height=dp(56), spacing=dp(8))
-        self.gas = TextInput(text=DEFAULT_GAS_MAX, hint_text="Gas max gwei", font_size=dp(20), size_hint_x=0.4)
+        # Contract (centered, smaller so it fits)
+        c_lbl = Label(
+            text=f"Contract:\n{CONTRACT}",
+            size_hint_y=None, height=dp(44), font_size=dp(13), bold=True,
+            color=(0.45, 0.95, 0.55, 1), halign="center", valign="middle"
+        )
+        c_lbl.bind(size=c_lbl.setter("text_size"))
+        content.add_widget(c_lbl)
+
+        content.add_widget(field_label("Private Key"))
+        self.pk = make_input(hint_text="0x...", password=True)
+        content.add_widget(self.pk)
+
+        content.add_widget(field_label("IntendedTo Address"))
+        self.target = make_input(text=DEFAULT_INTENDED, font_size=dp(13))
+        content.add_widget(self.target)
+
+        content.add_widget(field_label("RPC URL"))
+        self.rpc = make_input(text=DEFAULT_RPC, font_size=dp(13))
+        content.add_widget(self.rpc)
+
+        # Gas row centered
+        gas_row = BoxLayout(size_hint_y=None, height=dp(48), spacing=dp(8))
+        self.gas = TextInput(text=DEFAULT_GAS_MAX, hint_text="Gas max gwei", font_size=dp(16), size_hint_x=0.35, halign="center")
         gas_row.add_widget(self.gas)
-        self.save_gas = CheckBox(size_hint_x=None, width=dp(36))
+        self.save_gas = CheckBox(size_hint_x=None, width=dp(32))
         gas_row.add_widget(self.save_gas)
-        gas_row.add_widget(Label(text="Save gas for task", font_size=dp(18), bold=True, size_hint_x=0.5, halign="left"))
-        self.add_widget(gas_row)
+        gas_row.add_widget(Label(text="Save gas for task", font_size=dp(15), bold=True, size_hint_x=0.55, halign="left"))
+        content.add_widget(gas_row)
 
         # Buttons
-        btn_row = BoxLayout(size_hint_y=None, height=dp(64), spacing=dp(10))
-        self.start_btn = Button(text="START / CONTINUE", background_color=(0.05, 0.75, 0.25, 1), font_size=dp(22), bold=True)
+        btn_row = BoxLayout(size_hint_y=None, height=dp(54), spacing=dp(10))
+        self.start_btn = Button(text="START / CONTINUE", background_color=(0.05, 0.75, 0.25, 1), font_size=dp(17), bold=True)
         self.start_btn.bind(on_press=self.on_start)
-        self.stop_btn = Button(text="STOP", background_color=(0.8, 0.15, 0.15, 1), font_size=dp(22), bold=True, disabled=True)
+        self.stop_btn = Button(text="STOP", background_color=(0.8, 0.15, 0.15, 1), font_size=dp(17), bold=True, disabled=True)
         self.stop_btn.bind(on_press=self.on_stop)
         btn_row.add_widget(self.start_btn)
         btn_row.add_widget(self.stop_btn)
-        self.add_widget(btn_row)
+        content.add_widget(btn_row)
 
-        # Stats
+        # Stats centered
         self.stats = Label(
             text="Push: - | Trust: - | Effective: -\nSpent: 0.00000 ETH | Sigs: 0",
-            size_hint_y=None, height=dp(70), font_size=dp(20), bold=True,
-            halign="left", valign="middle"
+            size_hint_y=None, height=dp(56), font_size=dp(16), bold=True,
+            halign="center", valign="middle"
         )
         self.stats.bind(size=self.stats.setter("text_size"))
-        self.add_widget(self.stats)
+        content.add_widget(self.stats)
 
         self.status_line = Label(
-            text="News pool: loading...", size_hint_y=None, height=dp(34),
-            font_size=dp(18), bold=True, color=(0.7, 0.85, 1, 1)
+            text="News pool: loading...", size_hint_y=None, height=dp(30),
+            font_size=dp(14), bold=True, color=(0.7, 0.85, 1, 1),
+            halign="center"
         )
-        self.add_widget(self.status_line)
+        self.status_line.bind(size=self.status_line.setter("text_size"))
+        content.add_widget(self.status_line)
 
-        # Large scrollable log with markup for green clickable links
+        # Log area (tall, scrollable inside main scroll)
         self.log_label = LogLabel(
             text="Ready. Enter key and press START.\n",
-            size_hint_y=None, font_size=dp(18),
+            size_hint_y=None, font_size=dp(14),
             halign="left", valign="top",
             markup=True, color=(0.9, 0.9, 0.9, 1)
         )
         self.log_label.bind(texture_size=self._update_log_height)
         self.log_label.bind(size=lambda inst, val: setattr(inst, "text_size", (val[0], None)))
-        sc = ScrollView(size_hint=(1, 1), do_scroll_x=False)
-        sc.add_widget(self.log_label)
-        self.add_widget(sc)
+        content.add_widget(self.log_label)
+
+        scroll.add_widget(content)
+        self.add_widget(scroll)
 
         Clock.schedule_once(self.try_load, 0.4)
         Clock.schedule_once(self._load_news, 0.8)
@@ -294,13 +325,11 @@ class MinerUI(BoxLayout):
                 pass
 
     def _update_log_height(self, instance, size):
-        instance.height = max(size[1], dp(400))
+        instance.height = max(size[1], dp(320))
 
     def log(self, msg, tx_url=None):
-        """Add a log entry. If tx_url given, put green clickable link on next line."""
         ts = datetime.now().strftime("%H:%M:%S")
-        # Escape markup special chars in msg
-        safe = (msg.replace("&", "&amp;").replace("[", "(").replace("]", ")"))
+        safe = msg.replace("&", "&amp;").replace("[", "(").replace("]", ")")
         line = f"[{ts}] {safe}"
         if tx_url:
             line += f"\n[color=33ff66][ref={tx_url}]{tx_url}[/ref][/color]"
@@ -364,7 +393,7 @@ class MinerUI(BoxLayout):
         self.mining = True
         self.start_btn.disabled = True
         self.stop_btn.disabled = False
-        self.log("Mining started: 6 then 9, pause 6s, unique news per sig")
+        self.log("Mining started: 6 then 9, pause 6s")
         self.thread = threading.Thread(target=self.loop, daemon=True)
         self.thread.start()
 
@@ -475,7 +504,6 @@ class MinerUI(BoxLayout):
                             except Exception:
                                 pass
 
-                    # Refresh on-chain stats after each batch
                     self._refresh_stats(signer)
 
                 if not self.mining:
