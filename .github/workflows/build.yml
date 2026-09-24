@@ -32,10 +32,10 @@ jobs:
             libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
             zlib1g-dev unzip
 
-      - name: Install Buildozer (exact versions from working project)
+      - name: Install Buildozer (latest, to avoid stale libthorvg/NDK recipe bugs)
         run: |
           pip install --upgrade pip
-          pip install buildozer==1.5.0 python-for-android==2024.1.21 cython==0.29.36
+          pip install --upgrade buildozer python-for-android cython==0.29.36
 
       - name: Clean previous build cache
         run: rm -rf .buildozer bin
